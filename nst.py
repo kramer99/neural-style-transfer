@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import scipy.io
 import imageio
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,26 +8,31 @@ from keras import backend as K
 from vgg19 import build_model
 import image_utils
 
-def get_layer_activations(input_image, layer_name):
-    f = K.function([model.layers[0].input], [model.get_layer(layer_name).output])
-    return f([input_image])[0]
-
 def content_cost(a_C, a_G):
-    m, n_H, n_W, n_C = a_G.shape
-    J_content = np.sum(np.power(a_C - a_G, 2)) / (4 * n_H * n_W * n_C)
-    return J_content
+    n_H, n_W, n_C = K.int_shape(a_C)
+    return K.sum(K.pow(a_C - a_G, 2)) / (4 * n_H * n_W * n_C)
 
 def style_cost(a_S, a_G):
-    m, n_H, n_W, n_C = a_G.shape
-    a_S_reshaped = np.reshape(a_S, (n_H * n_W, n_C))
-    a_G_reshaped = np.reshape(a_G, (n_H * n_W, n_C))
-    G_S = np.dot(a_S_reshaped.T, a_S_reshaped)      # gram matrix (style)
-    G_G = np.dot(a_G_reshaped.T, a_G_reshaped)      # gram matrix (generated)
-    J_style = np.sum(np.power(G_S - G_G, 2)) / (np.power(2 * n_H * n_W * n_C, 2))
-    return J_style
+    n_H, n_W, n_C = K.int_shape(a_S)
+    a_S_reshaped = K.reshape(a_S, (n_H * n_W, n_C))
+    a_G_reshaped = K.reshape(a_G, (n_H * n_W, n_C))
+    G_S = K.dot(K.transpose(a_S_reshaped), a_S_reshaped)      # gram matrix (style)
+    G_G = K.dot(K.transpose(a_G_reshaped), a_G_reshaped)      # gram matrix (generated)
+    return K.sum(K.pow(G_S - G_G, 2)) / K.cast(K.pow(2 * n_H * n_W * n_C, 2), dtype='float32')
 
-def total_cost(J_content, J_style, alpha = 1, beta = 10000):
+def total_cost(J_content, J_style, alpha = 10, beta = 40):
     return alpha * J_content + beta * J_style
+
+def compute_cost_and_gradients(a_C, a_S, a_G, input_tensor):
+    print('input shape: ', input_tensor.shape)
+    J_content = content_cost(a_C, a_G)
+    J_style = style_cost(a_S, a_G)
+    J_total = total_cost(J_content, J_style)
+    grads_out = K.gradients(J_total, model.input)
+    f = K.function([model.input], [J_total, J_content, J_style, grads_out[0]])
+    J, J_C, J_S, grads = f([input_tensor])
+    print('J content: ', J_C, ' J style: ', J_S, ' J total: ', J)
+    return J, grads
 
 model = build_model()
 
@@ -39,44 +43,41 @@ content_image = image_utils.reshape_and_normalize_image(content_image)
 generated_image = image_utils.generate_noise_image(content_image)
 plt.imshow(generated_image[0])
 
-# TODO: more layers than just conv3_1
-a_C = get_layer_activations(content_image, 'conv3_1')
-a_S = get_layer_activations(style_image, 'conv3_1')
-#a_G = get_layer_activations(generated_image, 'conv3_1')
-#J_content = content_cost(a_C, a_G)
-#J_style = style_cost(a_S, a_G)
-#J_total = total_cost(J_content, J_style)
+# make this a unit test
+# a_S = K.random_normal_variable(shape=(4, 4, 3), mean=1, scale=4, seed=1)
+# a_G = K.random_normal_variable(shape=(4, 4, 3), mean=1, scale=4, seed=1)
+# J_style = style_cost(a_S, a_G)
+# print(K.eval(J_style))
 
-num_iterations = 5
+# we represent the three images as three input samples so that we can calculate costs and gradients via a single forward/back pass
+input_tensor = K.concatenate([content_image, style_image, generated_image], axis=0)
+layer = model.get_layer('conv3_1').output   # TODO: more layers than just conv3_1
+a_C = layer[0, :, :, :]
+a_S = layer[1, :, :, :]
+a_G = layer[2, :, :, :]
+
+num_iterations = 1
 for i in range(num_iterations):
     
-    print('begin: ', generated_image.shape)
+    def f(x):
+        J, grads = compute_cost_and_gradients(a_C, a_S, a_G, input_tensor)
+        return J
     
-    # total cost for this iteration of generated image
-    a_G = get_layer_activations(generated_image, 'conv3_1')
-    J_content = content_cost(a_C, a_G)
-    J_style = style_cost(a_S, a_G)
-    J_total = total_cost(J_content, J_style)
-    
-    # get the gradients of the generated image wrt the total cost
-    generated_image_placeholder = K.placeholder(generated_image.shape)
-    loss_var = K.variable(0.0)
-    J_total_var = K.variable(J_total)   # TODO: J_total is not connected to the graph, hence undifferentiable
-    grads_f = K.gradients(J_total_var, generated_image_placeholder)
-    
-    outputs = [loss_var]
-    if isinstance(grads_f, (list, tuple)):
-        outputs += grads_f
-    else:
-        outputs.append(grads_f)    
-    f = K.function([generated_image_placeholder], outputs)
-    #f = K.function([generated_image_placeholder], [loss_var, grads_f])
-    loss, grads = f([generated_image])
-
-    # this should update the generated image 
-    generated_image, min_val, info = fmin_l_bfgs_b(loss, generated_image.flatten(), fprime = grads, maxfun=20)
-    print('after optimize shape: ', generated_image.shape)    
+    def g(x):
+        # TODO: it is kind of whack to be running the same expensive operation twice
+        J, grads = compute_cost_and_gradients(a_C, a_S, a_G, input_tensor)
+        print(grads.shape)
+        grads = grads.flatten()
+        print(grads.shape)
+        return grads
+        
+    # this should update the generated image
+    generated_image, min_val, info = fmin_l_bfgs_b(f, generated_image.flatten(), fprime = g, maxfun=20)
     print('loss:', min_val)
+    
+    # the activations for style and content will not change, so from now on we 
+    # reduce the input to just the image being generated
+    input_tensor = generated_image
     
     fname = 'at_iteration_%d.png' % i
     image_utils.save_img(fname, generated_image)
