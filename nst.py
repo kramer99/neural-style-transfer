@@ -24,7 +24,6 @@ def total_cost(J_content, J_style, alpha = 10, beta = 40):
     return alpha * J_content + beta * J_style
 
 def compute_cost_and_gradients(a_C, a_S, a_G, input_tensor):
-    print('input shape: ', input_tensor.shape)
     J_content = content_cost(a_C, a_G)
     J_style = style_cost(a_S, a_G)
     J_total = total_cost(J_content, J_style)
@@ -56,23 +55,28 @@ a_C = layer[0, :, :, :]
 a_S = layer[1, :, :, :]
 a_G = layer[2, :, :, :]
 
-num_iterations = 1
+num_iterations = 2
 for i in range(num_iterations):
+    print('iteration: ', i)
     
     def f(x):
         J, grads = compute_cost_and_gradients(a_C, a_S, a_G, input_tensor)
         return J
     
-    def g(x):
+    def df(x):
         # TODO: it is kind of whack to be running the same expensive operation twice
         J, grads = compute_cost_and_gradients(a_C, a_S, a_G, input_tensor)
-        print(grads.shape)
+        # on first iteration, generated image will be the last input sample of three.
+        # on subsequent iterations, it will be the last of one
+        grads = grads[-1]
+        # fmin_l_bfgs_b only handles 1D arrays
         grads = grads.flatten()
-        print(grads.shape)
+        # fmin_l_bfgs_b needs this to be float64 for some undocumented weird reason
+        grads = grads.astype(np.float64)
         return grads
         
     # this should update the generated image
-    generated_image, min_val, info = fmin_l_bfgs_b(f, generated_image.flatten(), fprime = g, maxfun=20)
+    generated_image, min_val, info = fmin_l_bfgs_b(f, generated_image.flatten(), fprime=df, maxfun=20)
     print('loss:', min_val)
     
     # the activations for style and content will not change, so from now on we 
@@ -80,4 +84,4 @@ for i in range(num_iterations):
     input_tensor = generated_image
     
     fname = 'at_iteration_%d.png' % i
-    image_utils.save_img(fname, generated_image)
+    image_utils.save_image(fname, generated_image)
