@@ -55,17 +55,24 @@ a_C = layer[0, :, :, :]
 a_S = layer[1, :, :, :]
 a_G = layer[2, :, :, :]
 
-num_iterations = 2
+# to avoid computing cost and gradients twice, we cache the gradients in this 
+# structure when f(x) is called, and reference it within df(x)
+class cache:    
+    grads = None
+
+num_iterations = 1
 for i in range(num_iterations):
     print('iteration: ', i)
     
     def f(x):
         J, grads = compute_cost_and_gradients(a_C, a_S, a_G, input_tensor)
+        cache.grads = grads
         return J
     
     def df(x):
-        # TODO: it is kind of whack to be running the same expensive operation twice
-        J, grads = compute_cost_and_gradients(a_C, a_S, a_G, input_tensor)
+        assert cache.grads is not None
+        grads = cache.grads
+        cache.grads = None
         # on first iteration, generated image will be the last input sample of three.
         # on subsequent iterations, it will be the last of one
         grads = grads[-1]
@@ -76,7 +83,7 @@ for i in range(num_iterations):
         return grads
         
     # this should update the generated image
-    generated_image, min_val, info = fmin_l_bfgs_b(f, generated_image.flatten(), fprime=df, maxfun=20)
+    generated_image, min_val, info = fmin_l_bfgs_b(f, generated_image.flatten(), fprime=df, maxfun=10)
     print('loss:', min_val)
     
     # the activations for style and content will not change, so from now on we 
