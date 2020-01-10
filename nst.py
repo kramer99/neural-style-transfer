@@ -8,12 +8,16 @@ from keras import backend as K
 from vgg19 import build_model
 import image_utils
 
+def get_layer_activations(input_image, layer_name):
+    f = K.function([model.layers[0].input], [model.get_layer(layer_name).output])
+    return f([input_image])[0]
+
 def content_cost(a_C, a_G):
-    n_H, n_W, n_C = K.int_shape(a_C)
+    n_H, n_W, n_C = a_C.shape
     return K.sum(K.pow(a_C - a_G, 2)) / (4 * n_H * n_W * n_C)
 
 def style_cost(a_S, a_G):
-    n_H, n_W, n_C = K.int_shape(a_S)
+    n_H, n_W, n_C = a_S.shape
     a_S_reshaped = K.reshape(a_S, (n_H * n_W, n_C))
     a_G_reshaped = K.reshape(a_G, (n_H * n_W, n_C))
     G_S = K.dot(K.transpose(a_S_reshaped), a_S_reshaped)      # gram matrix (style)
@@ -42,30 +46,29 @@ content_image = image_utils.reshape_and_normalize_image(content_image)
 generated_image = image_utils.generate_noise_image(content_image)
 plt.imshow(generated_image[0])
 
-# make this a unit test
-# a_S = K.random_normal_variable(shape=(4, 4, 3), mean=1, scale=4, seed=1)
-# a_G = K.random_normal_variable(shape=(4, 4, 3), mean=1, scale=4, seed=1)
-# J_style = style_cost(a_S, a_G)
-# print(K.eval(J_style))
+# these activations can be evaluated once now, as they won't change
+a_C = get_layer_activations(content_image, 'conv3_1')
+a_C = a_C.reshape((56,56,256))
+a_S = get_layer_activations(style_image, 'conv3_1')
+a_S = a_S.reshape((56,56,256))
 
-# we represent the three images as three input samples so that we can calculate costs and gradients via a single forward/back pass
-input_tensor = K.concatenate([content_image, style_image, generated_image], axis=0)
-layer = model.get_layer('conv3_1').output   # TODO: more layers than just conv3_1
-a_C = layer[0, :, :, :]
-a_S = layer[1, :, :, :]
-a_G = layer[2, :, :, :]
+# these activations will be evaluated on each iteration in the loop below
+a_G = model.get_layer('conv3_1').output   # TODO: more layers than just conv3_1
 
 # to avoid computing cost and gradients twice, we cache the gradients in this 
 # structure when f(x) is called, and reference it within df(x)
 class cache:    
     grads = None
 
-num_iterations = 1
+num_iterations = 3
 for i in range(num_iterations):
     print('iteration: ', i)
     
     def f(x):
-        J, grads = compute_cost_and_gradients(a_C, a_S, a_G, input_tensor)
+        x = x.reshape((1, image_utils.CONFIG.IMAGE_HEIGHT,
+                       image_utils.CONFIG.IMAGE_WIDTH, 
+                       image_utils.CONFIG.COLOR_CHANNELS))
+        J, grads = compute_cost_and_gradients(a_C, a_S, a_G, x)
         cache.grads = grads
         return J
     
@@ -85,10 +88,11 @@ for i in range(num_iterations):
     # this should update the generated image
     generated_image, min_val, info = fmin_l_bfgs_b(f, generated_image.flatten(), fprime=df, maxfun=10)
     print('loss:', min_val)
-    
-    # the activations for style and content will not change, so from now on we 
-    # reduce the input to just the image being generated
-    input_tensor = generated_image
+        
+    generated_image = generated_image.reshape((1, image_utils.CONFIG.IMAGE_HEIGHT,
+                                               image_utils.CONFIG.IMAGE_WIDTH, 
+                                               image_utils.CONFIG.COLOR_CHANNELS))
+    plt.imshow(generated_image[0])
     
     fname = 'at_iteration_%d.png' % i
     image_utils.save_image(fname, generated_image)

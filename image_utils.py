@@ -44,8 +44,6 @@ def reshape_and_normalize_image(image):
 
 def save_image(path, image):
     
-    image = image.reshape((1, CONFIG.IMAGE_HEIGHT, CONFIG.IMAGE_WIDTH, CONFIG.COLOR_CHANNELS))
-    
     # Un-normalize the image so that it looks good
     image = image + CONFIG.MEANS
     
