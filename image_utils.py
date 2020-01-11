@@ -42,12 +42,16 @@ def reshape_and_normalize_image(image):
     return image
 
 
-def save_image(path, image):
+def convert(image):
     
     # Un-normalize the image so that it looks good
     image = image + CONFIG.MEANS
     
     # Clip and Save the image
     image = np.clip(image[0], 0, 255).astype('uint8')
-    #scipy.misc.imsave(path, image)
+    return image
+
+
+def save_image(path, image):
+    image = convert(image)
     imageio.imsave(path, image)
