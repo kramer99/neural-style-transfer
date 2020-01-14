@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import fmin_l_bfgs_b
 from keras import backend as K
+from PIL import Image
 from vgg19 import build_model
 import image_utils
 
@@ -42,8 +43,10 @@ model = build_model()
 
 J_history = []
 
-style_image = imageio.imread('starry_night-resized.jpg')
-style_image = image_utils.reshape_and_normalize_image(style_image)
+#style_image = imageio.imread('starry_night-resized.jpg')
+style_image = Image.open('styles/hr_giger_biomechanicallandscape_II.jpg')
+style_image = style_image.resize((224,224))
+style_image = image_utils.reshape_and_normalize_image(np.asarray(style_image))
 content_image = imageio.imread('elephant.jpg')
 content_image = image_utils.reshape_and_normalize_image(content_image)
 generated_image = image_utils.generate_noise_image(content_image)
