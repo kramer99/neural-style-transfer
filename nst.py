@@ -55,9 +55,8 @@ content_image = imageio.imread('elephant.jpg')
 content_image = image_utils.reshape_and_normalize_image(content_image)
 input_shape = content_image.shape[-3:]
 #style_image = Image.open('styles/hr_giger_biomechanicallandscape_II.jpg')
-# style_image = Image.open('starry_night-resized.jpg')
-style_image = Image.open('styles/the-scream.jpg')
-style_image = style_image.resize(input_shape[:-1])
+style_image = Image.open('starry_night-resized.jpg')
+style_image = style_image.convert('RGB').resize(input_shape[:-1])
 style_image = image_utils.reshape_and_normalize_image(np.asarray(style_image))
 generated_image = image_utils.generate_noise_image(content_image)
 
