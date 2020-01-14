@@ -5,7 +5,7 @@ import numpy as np
 from keras.layers.convolutional import Convolution2D, AveragePooling2D
 from keras.models import Sequential
 
-def build_model():
+def build_model(input_shape):
 
     def _weights(layer, expected_layer_name):
         """
@@ -28,8 +28,7 @@ def build_model():
     vgg_layers = vgg['layers']
     
     model = Sequential([
-        #Convolution2D(64, (3, 3), name='conv1_1', padding='same', activation='relu', input_shape=(300,400,3)),
-        Convolution2D(64, (3, 3), name='conv1_1', padding='same', activation='relu', input_shape=(224,224,3)),
+        Convolution2D(64, (3, 3), name='conv1_1', padding='same', activation='relu', input_shape=(input_shape)),
         Convolution2D(64, (3, 3), name='conv1_2', padding='same', activation='relu'),
         AveragePooling2D(pool_size=(2, 2), strides=(2, 2), name='avgpool1', padding='same'),
         Convolution2D(128, (3, 3), name='conv2_1', padding='same', activation='relu'),
@@ -69,6 +68,6 @@ def build_model():
     _set_weights_on_layer(18, 32)
     _set_weights_on_layer(19, 34)
     
-    #model.summary()
+    # model.summary()
     return model
 

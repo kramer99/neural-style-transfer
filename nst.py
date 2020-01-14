@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import imageio
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import fmin_l_bfgs_b
@@ -16,11 +17,11 @@ def get_activations(input_image):
     return f([input_image])
 
 def content_cost(a_C, a_G):
-    n_H, n_W, n_C = a_C.shape
+    _, n_H, n_W, n_C = a_C.shape
     return K.sum(K.pow(a_C - a_G, 2)) / (4 * n_H * n_W * n_C)
 
 def style_cost_layer(a_S, a_G):
-    n_H, n_W, n_C = a_S.shape
+    _, n_H, n_W, n_C = a_S.shape
     a_S_reshaped = K.reshape(a_S, (n_H * n_W, n_C))
     a_G_reshaped = K.reshape(a_G, (n_H * n_W, n_C))
     G_S = K.dot(K.transpose(a_S_reshaped), a_S_reshaped)      # gram matrix (style)
@@ -29,7 +30,7 @@ def style_cost_layer(a_S, a_G):
 
 def style_cost(activations_S, activations_G):
     cost = 0
-    layer_coefficients = [.2, .4, .6]
+    layer_coefficients = [.3, .4, .5]
     for i in range(len(activations_S)):
         a_S = activations_S[i]
         a_G = activations_G[i]
@@ -50,26 +51,22 @@ def compute_cost_and_gradients(activations_C, activations_S, activations_G, inpu
     J_history.append(J)
     return J, grads
 
-model = build_model()
-
-J_history = []
-
-#style_image = Image.open('styles/hr_giger_biomechanicallandscape_II.jpg')
-style_image = Image.open('starry_night-resized.jpg')
-style_image = style_image.resize((224,224))
-style_image = image_utils.reshape_and_normalize_image(np.asarray(style_image))
 content_image = imageio.imread('elephant.jpg')
 content_image = image_utils.reshape_and_normalize_image(content_image)
+input_shape = content_image.shape[-3:]
+#style_image = Image.open('styles/hr_giger_biomechanicallandscape_II.jpg')
+# style_image = Image.open('starry_night-resized.jpg')
+style_image = Image.open('styles/the-scream.jpg')
+style_image = style_image.resize(input_shape[:-1])
+style_image = image_utils.reshape_and_normalize_image(np.asarray(style_image))
 generated_image = image_utils.generate_noise_image(content_image)
+
+model = build_model(input_shape)
+J_history = []
 
 # these activations can be evaluated once now, as they won't change
 activations_C = get_activations(content_image)[0]   # just layer conv3_1 
-activations_C = activations_C.reshape((56,56,256))
-
 activations_S = get_activations(style_image)
-activations_S[0] = activations_S[0].reshape((56,56,256))
-activations_S[1] = activations_S[1].reshape((28,28,512))
-activations_S[2] = activations_S[2].reshape((14,14,512))
 
 # these activations will be evaluated on each iteration within fmin_l_bfgs_b
 activations_G = [model.get_layer('conv3_1').output,
@@ -82,9 +79,7 @@ class cache:
     grads = None
     
 def f(x):
-    x = x.reshape((1, image_utils.CONFIG.IMAGE_HEIGHT,
-                   image_utils.CONFIG.IMAGE_WIDTH, 
-                   image_utils.CONFIG.COLOR_CHANNELS))
+    x = x.reshape((content_image.shape))
     J, grads = compute_cost_and_gradients(activations_C, activations_S,
                                           activations_G, x)
     cache.grads = grads
@@ -104,12 +99,10 @@ def df(x):
 # Keras's built in optimizers, as the loss function needs to be supplied explicitly,
 # hence why using scikit-learn's L-BFGS optimizer here.
 # The optimizer will find pixel values that lower the scalar output of the cost function 'f'
-generated_image, min_val, info = fmin_l_bfgs_b(f, generated_image.flatten(), fprime=df, maxfun=30)
+generated_image, min_val, info = fmin_l_bfgs_b(f, generated_image.flatten(), fprime=df, maxfun=40)
     
-generated_image = generated_image.reshape((1, image_utils.CONFIG.IMAGE_HEIGHT,
-                                           image_utils.CONFIG.IMAGE_WIDTH, 
-                                           image_utils.CONFIG.COLOR_CHANNELS))
+generated_image = generated_image.reshape(content_image.shape)
     
-image_utils.save_image('output.png', generated_image)    
+image_utils.save_image('output/output_%d.png' %(time.time()), generated_image)    
 #plt.imshow(image_utils.convert(generated_image))
 plt.plot(np.arange(0,len(J_history)), J_history, label='J')
