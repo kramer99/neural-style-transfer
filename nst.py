@@ -26,7 +26,7 @@ def style_cost_layer(a_S, a_G):
     a_G_reshaped = K.reshape(a_G, (n_H * n_W, n_C))
     G_S = K.dot(K.transpose(a_S_reshaped), a_S_reshaped)      # gram matrix (style)
     G_G = K.dot(K.transpose(a_G_reshaped), a_G_reshaped)      # gram matrix (generated)
-    return K.sum(K.pow(G_S - G_G, 2)) / K.cast(K.pow(2 * n_H * n_W * n_C, 2), dtype='float32')
+    return K.sum(K.pow(G_S - G_G, 2)) / (2 * n_H * n_W * n_C)**2
 
 def style_cost(activations_S, activations_G):
     cost = 0
@@ -47,7 +47,7 @@ def compute_cost_and_gradients(activations_C, activations_S, activations_G, inpu
     grads_out = K.gradients(J_total, model.input)
     f = K.function([model.input], [J_total, J_content, J_style, grads_out[0]])
     J, J_C, J_S, grads = f([input_tensor])
-    print('J: %16d  content: %5d  style: %14d' %(J, J_C, J_S))
+    print('J: %12d  content: %5d  style: %10d' %(J, J_C, J_S))
     J_history.append(J)
     return J, grads
 
@@ -96,7 +96,7 @@ def df(x):
     
 # It only occurred to me mid way through this project that I would not be able to use
 # Keras's built in optimizers, as the loss function needs to be supplied explicitly,
-# hence why using scikit-learn's L-BFGS optimizer here.
+# hence why using scipy's L-BFGS optimizer here.
 # The optimizer will find pixel values that lower the scalar output of the cost function 'f'
 generated_image, min_val, info = fmin_l_bfgs_b(f, generated_image.flatten(), fprime=df, maxfun=40)
     
