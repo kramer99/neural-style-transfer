@@ -52,8 +52,8 @@ def compute_cost_and_gradients(activations_C, activations_S, activations_G, inpu
     J_history.append(J)
     return J, grads
 
-content_image = imageio.imread('elephant.jpg')
-content_image = image_utils.reshape_and_normalize_image(content_image)
+content_image = Image.open('elephant.jpg').convert('RGB')
+content_image = image_utils.reshape_and_normalize_image(np.asarray(content_image))
 input_shape = content_image.shape[-3:]
 #style_image = Image.open('styles/hr_giger_biomechanicallandscape_II.jpg')
 style_image = Image.open('starry_night-resized.jpg')
@@ -102,7 +102,7 @@ def df(x):
 # The optimizer will find pixel values that lower the scalar output of the cost function 'f'
 generated_image, min_val, info = fmin_l_bfgs_b(f, generated_image.flatten(), fprime=df, maxfun=40)
     
-generated_image = generated_image.reshape(content_image.shape)
+generated_image = generated_image.reshape(input_shape)
     
 image_utils.save_image('output/output_%d.png' %(time.time()), generated_image)    
 #plt.imshow(image_utils.convert(generated_image))
