@@ -11,7 +11,8 @@ from vgg19 import build_model
 import image_utils
 
 def get_activations(input_image):
-    f = K.function([model.input], [model.get_layer('conv3_1').output,
+    f = K.function([model.input], [model.get_layer('conv2_1').output,
+                                   model.get_layer('conv3_1').output,
                                    model.get_layer('conv4_1').output,
                                    model.get_layer('conv5_1').output])
     return f([input_image])
@@ -30,7 +31,7 @@ def style_cost_layer(a_S, a_G):
 
 def style_cost(activations_S, activations_G):
     cost = 0
-    layer_coefficients = [.3, .4, .5]
+    layer_coefficients = [.25, .25, .25, .25]
     for i in range(len(activations_S)):
         a_S = activations_S[i]
         a_G = activations_G[i]
@@ -41,7 +42,7 @@ def total_cost(J_content, J_style, alpha = 1, beta = 4):
     return alpha * J_content + beta * J_style
 
 def compute_cost_and_gradients(activations_C, activations_S, activations_G, input_tensor):
-    J_content = content_cost(activations_C, activations_G[0])     # conv3_1
+    J_content = content_cost(activations_C, activations_G[1])     # conv3_1
     J_style = style_cost(activations_S, activations_G)
     J_total = total_cost(J_content, J_style)
     grads_out = K.gradients(J_total, model.input)
@@ -64,11 +65,12 @@ model = build_model(input_shape)
 J_history = []
 
 # these activations can be evaluated once now, as they won't change
-activations_C = get_activations(content_image)[0]   # just layer conv3_1 
+activations_C = get_activations(content_image)[1]   # just layer conv3_1 
 activations_S = get_activations(style_image)
 
 # these activations will be evaluated on each iteration within fmin_l_bfgs_b
-activations_G = [model.get_layer('conv3_1').output,
+activations_G = [model.get_layer('conv2_1').output,
+                 model.get_layer('conv3_1').output,
                  model.get_layer('conv4_1').output,
                  model.get_layer('conv5_1').output]
 
